@@ -24,8 +24,8 @@ class _Ic2Reg:
 class _Rgb(EnumDict):
     RED = 1
     GREEN = 2
-    BLUE = 3
-    YELLOW = 4
+    YELLOW = 3
+    BLUE = 4
     PINK = 5
     CYAN = 6
     WHITE = 7

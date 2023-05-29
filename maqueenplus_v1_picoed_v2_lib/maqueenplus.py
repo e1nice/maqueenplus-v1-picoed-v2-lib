@@ -4,19 +4,25 @@ from .enum_dict import EnumDict
 
 
 class _Ic2Reg:
-    MOTORS = 0x00
-    MOTOR_LEFT = 0x01
-    MOTOR_RIGHT = 0x02
-    ENCODERS = 0x04
+    MOTOR_LEFT_DIR = 0x00
+    MOTOR_LEFT_SPD = 0x01
+    MOTOR_RIGHT_DIR = 0x02
+    MOTOR_RIGHT_SPD = 0x03
+    ENCODER_LEFT = 0x04
     ENCODER_RIGHT = 0x06
     PID = 0x0a
-    LEDS = 0x0b
+    LED_LEFT = 0x0b
     LED_RIGHT = 0x0c
     SERVO_S1 = 0x14
     SERVO_S2 = 0x15
     SERVO_S3 = 0x16
     LINE_BW = 0x1d
-    LINE_GRAY = 0x1e
+    LINE_GRAY_L3 = 0x1e
+    LINE_GRAY_L2 = 0x20
+    LINE_GRAY_L1 = 0x22
+    LINE_GRAY_R1 = 0x24
+    LINE_GRAY_R2 = 0x26
+    LINE_GRAY_R3 = 0x28
     VERSION_LEN = 0x32
     VERSION_DATA = 0x33
 
@@ -30,6 +36,15 @@ class _Rgb(EnumDict):
     CYAN = 6
     WHITE = 7
     OFF = 0
+
+
+class _Gray:
+    L3 = _Ic2Reg.LINE_GRAY_L3
+    L2 = _Ic2Reg.LINE_GRAY_L2
+    L1 = _Ic2Reg.LINE_GRAY_L1
+    R1 = _Ic2Reg.LINE_GRAY_R1
+    R2 = _Ic2Reg.LINE_GRAY_R2
+    R3 = _Ic2Reg.LINE_GRAY_R3
 
 
 class _MotorDirection:
@@ -48,34 +63,18 @@ class MaqueenPlus:
     RGB = _Rgb()
     MOTOR_DIR = _MotorDirection()
     PID = _Pid()
+    GRAY = _Gray()
+    _DEFAULT_LINE_THRESHOLD = 2500
 
     def __init__(self, i2c: I2C, address=0x10):
         self._mq_i2c = I2cDev(i2c, address)
         self._address = address
         self._ENCODER_TICKS = 80
-
-    @property
-    def motor_left(self):
-        direction, speed = self._mq_i2c.read(self.I2C_REG.MOTORS, "BB")
-        if direction == self.MOTOR_DIR.BACKWARD:
-            value = -1 * speed
-        else:
-            value = direction * speed
-        return value
-
-    @motor_left.setter
-    def motor_left(self, value: int):
-        if value < 0:
-            direction = self.MOTOR_DIR.BACKWARD
-            speed = min(240, -1 * value)
-        else:
-            direction = self.MOTOR_DIR.FORWARD
-            speed = min(240, value)
-        self._mq_i2c.write(self.I2C_REG.MOTORS, "BB", direction, speed)
+        self._line_threshold = self._DEFAULT_LINE_THRESHOLD
 
     @property
     def motors(self):
-        left_direction, left_speed, right_direction, right_speed = self._mq_i2c.read(self.I2C_REG.MOTORS, "BBBB")
+        left_direction, left_speed, right_direction, right_speed = self._mq_i2c.read(self.I2C_REG.MOTOR_LEFT_DIR, "BBBB")
         if left_direction == self.MOTOR_DIR.BACKWARD:
             left = -1 * left_speed
         else:
@@ -105,11 +104,30 @@ class MaqueenPlus:
             else:
                 right_direction = self.MOTOR_DIR.FORWARD
                 right_speed = min(240, right)
-        self._mq_i2c.write(self.I2C_REG.MOTORS, "BBBB", left_direction, left_speed, right_direction, right_speed)
+        self._mq_i2c.write(self.I2C_REG.MOTOR_LEFT_DIR, "BBBB", left_direction, left_speed, right_direction, right_speed)
+
+    @property
+    def motor_left(self):
+        direction, speed = self._mq_i2c.read(self.I2C_REG.MOTOR_LEFT_DIR, "BB")
+        if direction == self.MOTOR_DIR.BACKWARD:
+            value = -1 * speed
+        else:
+            value = direction * speed
+        return value
+
+    @motor_left.setter
+    def motor_left(self, value: int):
+        if value < 0:
+            direction = self.MOTOR_DIR.BACKWARD
+            speed = min(240, -1 * value)
+        else:
+            direction = self.MOTOR_DIR.FORWARD
+            speed = min(240, value)
+        self._mq_i2c.write(self.I2C_REG.MOTOR_LEFT_DIR, "BB", direction, speed)
 
     @property
     def motor_right(self):
-        direction, speed = self._mq_i2c.read(self.I2C_REG.MOTOR_RIGHT, "BB")
+        direction, speed = self._mq_i2c.read(self.I2C_REG.MOTOR_RIGHT_DIR, "BB")
         if direction == self.MOTOR_DIR.BACKWARD:
             value = -1 * speed
         else:
@@ -124,21 +142,21 @@ class MaqueenPlus:
         else:
             direction = self.MOTOR_DIR.FORWARD
             speed = min(240, value)
-        self._mq_i2c.write(self.I2C_REG.MOTOR_RIGHT, "BB", direction, speed)
-
-    @property
-    def encoder_left(self):
-        return self._mq_i2c.read(self.I2C_REG.ENCODERS, ">H")[0]
-
-    def clear_encoder_left(self):
-        self._mq_i2c.write(self.I2C_REG.ENCODERS, ">H", 0)
+        self._mq_i2c.write(self.I2C_REG.MOTOR_RIGHT_DIR, "BB", direction, speed)
 
     @property
     def encoders(self):
-        return self._mq_i2c.read(self.I2C_REG.ENCODERS, ">HH")
+        return self._mq_i2c.read(self.I2C_REG.ENCODER_LEFT, ">HH")
 
     def clear_encoders(self):
-        self._mq_i2c.write(self.I2C_REG.ENCODERS, ">HH", 0, 0)
+        self._mq_i2c.write(self.I2C_REG.ENCODER_LEFT, ">HH", 0, 0)
+
+    @property
+    def encoder_left(self):
+        return self._mq_i2c.read(self.I2C_REG.ENCODER_LEFT, ">H")[0]
+
+    def clear_encoder_left(self):
+        self._mq_i2c.write(self.I2C_REG.ENCODER_LEFT, ">H", 0)
 
     @property
     def encoder_right(self):
@@ -156,16 +174,8 @@ class MaqueenPlus:
         self._mq_i2c.write(self.I2C_REG.PID, "B", on)
 
     @property
-    def rgb_left(self):
-        return self._mq_i2c.read(self.I2C_REG.LEDS, "B")[0]
-
-    @rgb_left.setter
-    def rgb_left(self, value: int):
-        self._mq_i2c.write(self.I2C_REG.LEDS, "B", value % 8)
-
-    @property
     def rgbs(self):
-        return self._mq_i2c.read(self.I2C_REG.LEDS, "BB")
+        return self._mq_i2c.read(self.I2C_REG.LED_LEFT, "BB")
 
     @rgbs.setter
     def rgbs(self, left_right: (int, int)):
@@ -174,7 +184,15 @@ class MaqueenPlus:
         except ValueError:
             raise ValueError("Pass an iterable with two values, for left and right rgb led.")
         else:
-            self._mq_i2c.write(self.I2C_REG.LEDS, "BB", left % 8, right % 8)
+            self._mq_i2c.write(self.I2C_REG.LED_LEFT, "BB", left % 8, right % 8)
+
+    @property
+    def rgb_left(self):
+        return self._mq_i2c.read(self.I2C_REG.LED_LEFT, "B")[0]
+
+    @rgb_left.setter
+    def rgb_left(self, value: int):
+        self._mq_i2c.write(self.I2C_REG.LED_LEFT, "B", value % 8)
 
     @property
     def rgb_right(self):
@@ -183,6 +201,21 @@ class MaqueenPlus:
     @rgb_right.setter
     def rgb_right(self, value: int):
         self._mq_i2c.write(self.I2C_REG.LED_RIGHT, "B", value % 8)
+
+    @property
+    def servos(self):
+        return self._mq_i2c.read(self.I2C_REG.SERVO_S1, "BBB")[0]
+
+    @servos.setter
+    def servos(self, s1_s2_s3: (int, int, int)):
+        try:
+            s1, s2, s3 = s1_s2_s3
+        except ValueError:
+            raise ValueError("Pass an iterable with three values, for sensor 1, 2 and 3.")
+        degrees1 = max(0, min(180, s1))
+        degrees2 = max(0, min(180, s2))
+        degrees3 = max(0, min(180, s3))
+        self._mq_i2c.write(self.I2C_REG.SERVO_S1, "BBB", degrees1, degrees2, degrees3)
 
     @property
     def s1(self):
@@ -212,7 +245,19 @@ class MaqueenPlus:
         self._mq_i2c.write(self.I2C_REG.SERVO_S3, "B", value)
 
     @property
-    def line_bw(self):
+    def line_bw_threshold(self):
+        return self._line_threshold
+
+    @line_bw_threshold.setter
+    def line_bw_threshold(self, line_threshold):
+        self._line_threshold = line_threshold
+
+    @property
+    def line_bw_auto(self):
+        return self._mq_i2c.read(self.I2C_REG.LINE_BW, "B")[0]
+
+    @property
+    def line_bw_auto_split(self):
         bw = self._mq_i2c.read(self.I2C_REG.LINE_BW, "B")[0]
         s = []
         for i in range(6):
@@ -220,27 +265,54 @@ class MaqueenPlus:
         return tuple(s)
 
     @property
-    def line_gray(self):
-        return self._mq_i2c.read(self.I2C_REG.LINE_GRAY, ">HHHHHH")
+    def line_bw(self):
+        grays = self._mq_i2c.read(self.I2C_REG.LINE_GRAY_L3, ">HHHHHH")
+        s = 0
+        for i in range(6):
+            if grays[i] < self._line_threshold:
+                s += 2 ** i
+        return s
+
+    @property
+    def line_bw_split(self):
+        grays = self._mq_i2c.read(self.I2C_REG.LINE_GRAY_L3, ">HHHHHH")
+        s = []
+        for i in range(6):
+            s.append(grays[i] < self._line_threshold)
+        return tuple(s)
+
+    @property
+    def line_grays(self):
+        return self._mq_i2c.read(self.I2C_REG.LINE_GRAY_L3, ">HHHHHH")
+
+    def line_gray(self, sensor):
+        return self._mq_i2c.read(sensor, ">H")[0]
+
+    @property
+    def line_gray_l3(self):
+        return self._mq_i2c.read(self.I2C_REG.LINE_GRAY_L3, ">H")[0]
+
+    @property
+    def line_gray_l2(self):
+        return self._mq_i2c.read(self.I2C_REG.LINE_GRAY_L2, ">H")[0]
+
+    @property
+    def line_gray_l1(self):
+        return self._mq_i2c.read(self.I2C_REG.LINE_GRAY_L1, ">H")[0]
+
+    @property
+    def line_gray_r1(self):
+        return self._mq_i2c.read(self.I2C_REG.LINE_GRAY_R1, ">H")[0]
+
+    @property
+    def line_gray_r2(self):
+        return self._mq_i2c.read(self.I2C_REG.LINE_GRAY_R2, ">H")[0]
+
+    @property
+    def line_gray_r3(self):
+        return self._mq_i2c.read(self.I2C_REG.LINE_GRAY_R3, ">H")[0]
 
     @property
     def version(self):
         v_len = self._mq_i2c.read(self.I2C_REG.VERSION_LEN, "B")[0]
         return self._mq_i2c.read_string(self.I2C_REG.VERSION_DATA, v_len)
-
-    # def get_us_mm(self):
-    #     if ticks_diff(ticks_ms(), self._us_last_ticks_ms) < self._US_INTERVAL_MS:
-    #         return self._us_last_mm
-    #     self._us_last_ticks_ms = ticks_ms()
-    #
-    #     self._US_TRIG_PIN.value(0)
-    #     self._US_TRIG_PIN.value()
-    #     self._US_TRIG_PIN.value(1)
-    #     self._US_TRIG_PIN.value(0)
-    #     us = time_pulse_us(self._US_ECHO_PIN, 1, 10500)
-    #
-    #     if us > 0:
-    #         mm = us * 0.1715
-    #     else:
-    #         mm = 9999
-    #     return mm
